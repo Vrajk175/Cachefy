@@ -1,112 +1,132 @@
 package com.example.demo.service;
 
-import org.apache.catalina.User;
-import org.springframework.cache.annotation.CacheEvict;
-import org.springframework.cache.annotation.Cacheable;
-import org.springframework.security.core.Authentication;
-import org.springframework.security.core.context.SecurityContextHolder;
-import com.example.demo.config.*;
 
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
-import org.springframework.web.bind.annotation.RestController;
-import com.example.demo.entity.*;
-import com.example.demo.exceptions.EmailAlreadyExistsException;
-import com.example.demo.exceptions.InvalidPasswordException;
-import com.example.demo.exceptions.UserNotFoundException;
+
+import com.example.demo.dto.ChangePasswordRequest;
 import com.example.demo.dto.LoginRequest;
 import com.example.demo.dto.LoginResponse;
 import com.example.demo.dto.ProfileResponse;
 import com.example.demo.dto.RegisterRequest;
 import com.example.demo.dto.UpdateProfileRequest;
-import com.example.demo.repository.UserRepo;
+import com.example.demo.entity.Role;
+import com.example.demo.entity.Users;
+import com.example.demo.exceptions.EmailAlreadyExistsException;
+import com.example.demo.exceptions.InvalidPasswordException;
+import com.example.demo.exceptions.UserNotFoundException;
+import com.example.demo.repository.UserRepository;
+
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 
 @Service
 public class UserService {
-	
-	private final UserRepo userrepo;
-	
-	private final PasswordEncoder passwordencode;
-	
-	private final SessionService sessionService;
-	
-	public UserService(UserRepo userrepo,PasswordEncoder passwordencode , SessionService sessionService) {
-		
-		this.userrepo=userrepo;
-		this.passwordencode = passwordencode;
-		this.sessionService = sessionService;
-		
-	}
-	
-	public String Greet() {
-		return "hello world";
-	}
-	
-	public void Register(RegisterRequest register) {
-		
-		Users user = new Users();
-		
-		user.setName(register.getName());
-		user.setEmail(register.getEmail());
-		user.setPassword(passwordencode.encode(register.getPassword()));
-		
-		if(userrepo.findByEmail(register.getEmail()).isPresent()) {
-			throw new EmailAlreadyExistsException("Email already exixts");
-		}
-		
 
-		userrepo.save(user);
-		
-		
-	}
-	
-	public LoginResponse Login(LoginRequest request) {
+    private final UserRepository userRepository;
+    private final PasswordEncoder passwordEncoder;
+    private final SessionService sessionService;
 
-	    Users user = userrepo.findByEmail(request.getEmail())
-	            .orElseThrow(() ->
-	                    new UserNotFoundException("User not found"));
+    public UserService(UserRepository userRepository , PasswordEncoder passwordEncoder, SessionService sessionService) {
+        this.userRepository = userRepository;
+        this.passwordEncoder=passwordEncoder;
+        this.sessionService=sessionService;
+    }
+    
+    
+    public void register(RegisterRequest request) {
 
-	    if (!passwordencode.matches(
-	            request.getPassword(),
-	            user.getPassword())) {
+      
 
-	        throw new InvalidPasswordException("Invalid password");
-	    }
-	    String sessionId = sessionService.createSession(user.getId());
+        var user = userRepository.findByEmail(request.getEmail());
 
-	    return new LoginResponse("login successfull",sessionId);
-	}
-	@Cacheable(value = "users" ,key = "#userId")
-	public ProfileResponse getProfile(Long userId) {
-		
-		
-		Users user = userrepo.findById(userId)
-	            .orElseThrow(() ->
-	                    new UserNotFoundException("User not found"));
-		
-		return new ProfileResponse(user.getId(),user.getEmail(),user.getName());
-			
-	}
-	
-	public void logout(String sessionId) {
+    
 
-	    sessionService.deleteSession(sessionId);
+        if (user.isPresent()) {
+            System.out.println("Duplicate email found");
+            throw new EmailAlreadyExistsException("Email already Exists");
+        }
 
-	}
-	@CacheEvict(value = "users" ,key = "#userId")
-	public void UpdateProfile(Long userId,UpdateProfileRequest request) {
-		
-		Users user = userrepo.findById(userId)
-	            .orElseThrow(() ->
-	                    new UserNotFoundException("User not found"));
-		
-		user.setName(request.getName());
-		
-		userrepo.save(user);
-		
-		
-	}
-	
-	
+        Users users = new Users();
+
+        users.setEmail(request.getEmail());
+        users.setName(request.getName());
+        users.setPassword(passwordEncoder.encode(request.getPassword()));
+        users.setRole(Role.USER);
+
+        userRepository.save(users);
+    }
+    public LoginResponse login(LoginRequest request) {
+    	Users user = userRepository.findByEmail(request.getEmail())
+                .orElseThrow(() ->
+                        new UserNotFoundException("User not found"));
+
+        if (!passwordEncoder.matches(
+                request.getPassword(),
+                user.getPassword())) {
+
+            throw new InvalidPasswordException("Invalid password");
+        }
+        String sessionId = sessionService.createSession(user.getId());
+        return new LoginResponse("Login successfull", sessionId);
+
+    }
+    @Cacheable(value = "users" , key = "#userId")
+    public ProfileResponse getProfile(Long userId) {
+    	
+    
+    	
+    	Users user = userRepository.findById(userId)
+                .orElseThrow(() ->
+                        new UserNotFoundException("User not found"));
+    	return new ProfileResponse(user.getId(),user.getName(),user.getEmail());
+
+    	
+    }
+    public void logout(String sessionId) {
+    	
+    	sessionService.deleteSession(sessionId);
+    }
+    @CacheEvict(value = "users", key = "#userId")
+    public void updateProfile(Long userId, UpdateProfileRequest request) {
+
+        Users user = userRepository.findById(userId)
+                .orElseThrow(() ->
+                        new UserNotFoundException("User not found"));
+
+        user.setName(request.getName());
+
+        userRepository.save(user);
+    }
+    @CacheEvict(value = "users", key = "#userId")
+    public void changePassword(Long userId, ChangePasswordRequest request) {
+
+        Users user = userRepository.findById(userId)
+                .orElseThrow(() ->
+                        new UserNotFoundException("User not found"));
+
+        if (!passwordEncoder.matches(
+                request.getOldPassword(),
+                user.getPassword())) {
+
+            throw new InvalidPasswordException("Old password is incorrect");
+        }
+        
+
+        user.setPassword(passwordEncoder.encode(request.getNewPassword()));
+
+        userRepository.save(user);
+    }
+    @CacheEvict(value = "users", key = "#userId")
+    public void deleteAccount(Long userId) {
+
+        Users user = userRepository.findById(userId)
+                .orElseThrow(() ->
+                        new UserNotFoundException("User not found"));
+
+        userRepository.delete(user);
+    }
 
 }

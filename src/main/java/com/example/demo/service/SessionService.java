@@ -9,44 +9,46 @@ import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.stereotype.Service;
 
 import com.example.demo.exceptions.InvalidSessionException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 
 
 @Service
 public class SessionService {
-
+	
+	
 	private final RedisTemplate<String, String> redisTemplate;
-    
-    public SessionService(RedisTemplate<String,String> redisTemplate) {
-    	this.redisTemplate = redisTemplate;
-    }
+	public SessionService(RedisTemplate<String,String>  redisTemplate) {
+		this.redisTemplate=redisTemplate;
+		
+	}
+	
+	private static final long SESSION_TIMEOUT = 30;
+	
+	
+	public String createSession(Long userId) {
 
-    private static final long SESSION_TIMEOUT = 30;
+	    String sessionId = UUID.randomUUID().toString();
 
-    public String createSession(Long userId) {
+	    redisTemplate.opsForValue().set(
+	            sessionId,
+	            userId.toString(),
+	            Duration.ofMinutes(SESSION_TIMEOUT)
+	    );
 
-        String sessionId = UUID.randomUUID().toString();
+	    return sessionId;
+	}
+	public long getUserIdBySession(String sessionId) {
+		String userId = redisTemplate.opsForValue().get(sessionId);
+		
+		if(userId==null) {
+			throw new InvalidSessionException("Invalid Session");
+		}
+		return Long.parseLong(userId);
+		
+	}
+	public String deleteSession(String sesssionId) {
+		return redisTemplate.opsForValue().getAndDelete(sesssionId);
+		
 
-        redisTemplate.opsForValue().set(
-                sessionId,
-                userId.toString(),
-                Duration.ofMinutes(SESSION_TIMEOUT)
-        );
-
-        return sessionId;
-    }
-    
-    public Long getUserIdBySession(String sessionId) {
-    	
-    	String userId = redisTemplate.opsForValue().get(sessionId);
-    	
-    	if(userId == null) {
-    		throw new InvalidSessionException("invalid session");
-    	}
-    	
-    	return Long.parseLong(userId);
-    	
-    }
-    public String deleteSession(String sesssionId) { 
-    	return redisTemplate.opsForValue().getAndDelete(sesssionId); 
-    	}
 }
+	}

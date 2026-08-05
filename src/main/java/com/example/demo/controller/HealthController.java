@@ -1,31 +1,22 @@
 package com.example.demo.controller;
 
-import org.springframework.stereotype.Controller;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.ResponseBody;
-import org.springframework.web.bind.annotation.RestController;
+import java.util.HashMap;
+import java.util.Map;
 
-import com.example.demo.service.UserService;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.RestController;
 
 @RestController
 public class HealthController {
-	
-	private final UserService service;
-	
-	public HealthController(UserService service) {
-		
-		this.service=service;
-		
-	}
-	
-	
-	@GetMapping("/health")
-	public String health(){
-		return "application";
-	}
-	
-	@GetMapping("/greet")
-	public String greeting() {
-		return service.Greet();
-	}
+
+    @GetMapping("/health")
+    public Map<String,String> health(){
+
+        Map<String,String> map=new HashMap<>();
+
+        map.put("status","UP");
+        map.put("application","CacheFlow");
+
+        return map;
+    }
 }
